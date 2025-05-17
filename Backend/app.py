@@ -25,7 +25,7 @@ CORS(app, supports_credentials=True)
 
 # Initialize NLP components
 try:
-    nlp = spacy.load("en_core_web_md")
+    nlp = spacy.load("en_core_web_sm")
     sentence_model = SentenceTransformer("all-MiniLM-L6-v2")
     nltk.download("stopwords", quiet=True)
     stop_words = set(stopwords.words("english"))
