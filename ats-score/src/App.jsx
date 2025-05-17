@@ -1,13 +1,21 @@
-import  React,{ useState } from 'react';
+
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import axios from 'axios';
 
 function App() {
-  const [resume, setResume] = useState(null);
-  const [jd, setJd] = useState(null);
+  const [files, setFiles] = useState({
+    resume: null,
+    jd: null
+  });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Configure axios for CORS with credentials
+  axios.defaults.withCredentials = true;
+  axios.defaults.baseURL = 'https://resume-analyzer-bcbc.onrender.com';
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -18,46 +26,45 @@ function App() {
     setIsDragging(false);
   };
 
-  const handleDrop = (setter) => (e) => {
+  const handleDrop = (fileType) => (e) => {
     e.preventDefault();
     setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setter(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files?.[0]) {
+      setFiles(prev => ({...prev, [fileType]: e.dataTransfer.files[0]}));
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!resume || !jd) {
+    setError(null);
+    
+    if (!files.resume || !files.jd) {
       setError('Please upload both resume and job description files');
       return;
     }
 
     setLoading(true);
-    setResult(null);
-    setError(null);
-
     const formData = new FormData();
-    formData.append('resume', resume);
-    formData.append('jd', jd);
+    formData.append('resume', files.resume);
+    formData.append('jd', files.jd);
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/api/score', {
-        method: 'POST',
-        body: formData,
+      const response = await axios.post('/api/score', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(errData.error || `Server error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setResult(data);
+      setResult(response.data);
     } catch (err) {
-      setError(err.message || 'Failed to analyze documents');
+      setError(err.response?.data?.error || err.message || 'Failed to analyze documents');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileChange = (fileType) => (e) => {
+    if (e.target.files?.[0]) {
+      setFiles(prev => ({...prev, [fileType]: e.target.files[0]}));
     }
   };
 
@@ -107,12 +114,6 @@ function App() {
     );
   };
 
-  const handleFileChange = (setter) => (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setter(e.target.files[0]);
-    }
-  };
-
   const extractVideoId = (url) => {
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
     const match = url.match(regExp);
@@ -121,6 +122,7 @@ function App() {
 
   return (
     <div className="w-screen min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
+      {/* Error Message */}
       <AnimatePresence>
         {error && (
           <motion.div
@@ -139,12 +141,14 @@ function App() {
         )}
       </AnimatePresence>
 
+      {/* Main Content */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.5 }}
         className="max-w-6xl mx-auto"
       >
+        {/* Header */}
         <header className="text-center mb-10">
           <motion.h1 
             initial={{ y: -20 }}
@@ -164,6 +168,7 @@ function App() {
           </motion.p>
         </header>
 
+        {/* Upload Form */}
         <main className="bg-white rounded-xl shadow-xl overflow-hidden">
           <motion.form
             onSubmit={handleSubmit}
@@ -173,12 +178,15 @@ function App() {
             transition={{ delay: 0.3 }}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              {/* Resume Upload */}
               <motion.div
                 whileHover={{ scale: 1.01 }}
-                className={`relative border-2 border-dashed rounded-2xl p-6 transition-all duration-300 ${isDragging ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-indigo-300'}`}
+                className={`relative border-2 border-dashed rounded-2xl p-6 transition-all duration-300 ${
+                  isDragging ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-indigo-300'
+                }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
-                onDrop={handleDrop(setResume)}
+                onDrop={handleDrop('resume')}
               >
                 <div className="flex flex-col items-center justify-center text-center">
                   <svg className="w-12 h-12 text-indigo-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -190,13 +198,13 @@ function App() {
                     Browse Files
                     <input 
                       type="file" 
-                      onChange={handleFileChange(setResume)} 
+                      onChange={handleFileChange('resume')} 
                       accept=".pdf,.docx"
                       className="hidden"
                     />
                   </label>
                 </div>
-                {resume && (
+                {files.resume && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -205,9 +213,9 @@ function App() {
                     <svg className="w-5 h-5 text-indigo-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-sm font-medium text-gray-700 truncate">{resume.name}</span>
+                    <span className="text-sm font-medium text-gray-700 truncate">{files.resume.name}</span>
                     <button 
-                      onClick={() => setResume(null)}
+                      onClick={() => setFiles(prev => ({...prev, resume: null}))}
                       className="ml-auto text-gray-400 hover:text-gray-600"
                     >
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -218,12 +226,15 @@ function App() {
                 )}
               </motion.div>
 
+              {/* Job Description Upload */}
               <motion.div
                 whileHover={{ scale: 1.01 }}
-                className={`relative border-2 border-dashed rounded-2xl p-6 transition-all duration-300 ${isDragging ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-indigo-300'}`}
+                className={`relative border-2 border-dashed rounded-2xl p-6 transition-all duration-300 ${
+                  isDragging ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-indigo-300'
+                }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
-                onDrop={handleDrop(setJd)}
+                onDrop={handleDrop('jd')}
               >
                 <div className="flex flex-col items-center justify-center text-center">
                   <svg className="w-12 h-12 text-indigo-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,13 +246,13 @@ function App() {
                     Browse Files
                     <input 
                       type="file" 
-                      onChange={handleFileChange(setJd)} 
+                      onChange={handleFileChange('jd')} 
                       accept=".pdf,.docx"
                       className="hidden"
                     />
                   </label>
                 </div>
-                {jd && (
+                {files.jd && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -250,9 +261,9 @@ function App() {
                     <svg className="w-5 h-5 text-indigo-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-sm font-medium text-gray-700 truncate">{jd.name}</span>
+                    <span className="text-sm font-medium text-gray-700 truncate">{files.jd.name}</span>
                     <button 
-                      onClick={() => setJd(null)}
+                      onClick={() => setFiles(prev => ({...prev, jd: null}))}
                       className="ml-auto text-gray-400 hover:text-gray-600"
                     >
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -264,12 +275,15 @@ function App() {
               </motion.div>
             </div>
 
+            {/* Submit Button */}
             <motion.button
               type="submit"
-              disabled={loading || !resume || !jd}
+              disabled={loading || !files.resume || !files.jd}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className={`w-full py-4 px-6 rounded-xl text-lg font-semibold transition-all duration-300 flex items-center justify-center ${(!resume || !jd) ? 'bg-gray-300 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg'}`}
+              className={`w-full py-4 px-6 rounded-xl text-lg font-semibold transition-all duration-300 flex items-center justify-center ${
+                (!files.resume || !files.jd) ? 'bg-gray-300 cursor-not-allowed' : 'bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white shadow-lg'
+              }`}
             >
               {loading ? (
                 <>
@@ -290,6 +304,7 @@ function App() {
             </motion.button>
           </motion.form>
 
+          {/* Loading Indicator */}
           <AnimatePresence>
             {loading && (
               <motion.div
@@ -316,6 +331,7 @@ function App() {
           </AnimatePresence>
         </main>
 
+        {/* Results Section */}
         <AnimatePresence>
           {result && (
             <motion.div
@@ -337,6 +353,7 @@ function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                  {/* Matched Skills */}
                   <motion.div 
                     whileHover={{ y: -5 }}
                     className="bg-green-50 rounded-xl p-6 border border-green-100"
@@ -363,6 +380,7 @@ function App() {
                     </ul>
                   </motion.div>
 
+                  {/* Missing Skills */}
                   <motion.div 
                     whileHover={{ y: -5 }}
                     className="bg-red-50 rounded-xl p-6 border border-red-100"
@@ -390,6 +408,7 @@ function App() {
                   </motion.div>
                 </div>
 
+                {/* Interview Videos */}
                 <div className="mb-12">
                   <h3 className="flex items-center text-xl font-semibold text-gray-800 mb-6">
                     <svg className="w-6 h-6 mr-2 text-red-500" fill="currentColor" viewBox="0 0 20 20">
@@ -415,7 +434,7 @@ function App() {
                                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                                 allowFullScreen
                                 title={video[0]}
-                              ></iframe>
+                              />
                             </div>
                           ) : (
                             <div className="bg-gray-200 h-40 flex items-center justify-center">
@@ -444,6 +463,7 @@ function App() {
                   </div>
                 </div>
 
+                {/* Suggestions */}
                 <div>
                   <h3 className="flex items-center text-xl font-semibold text-gray-800 mb-6">
                     <svg className="w-6 h-6 mr-2 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
@@ -473,6 +493,7 @@ function App() {
           )}
         </AnimatePresence>
 
+        {/* Footer */}
         <footer className="mt-12 text-center text-gray-500 text-sm">
           <p>© {new Date().getFullYear()} ATS Resume Analyzer. All rights reserved.</p>
         </footer>
